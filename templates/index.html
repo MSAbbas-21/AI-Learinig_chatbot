@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Under The Hood — Interactive Learning Chatbot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">🧠</div>
+      <div>
+        <h1 class="brand-title">AI Built By Abbas</h1>
+        <p class="brand-subtitle">Interactive Learning Chatbot & Architecture Explorer</p>
+      </div>
+    </div>
+    <nav class="nav-tabs" id="navTabs">
+      <button class="nav-tab active" data-tab="tab-chat">💬 Glass-Box Chat</button>
+      <button class="nav-tab" data-tab="tab-tokenizer">🔤 Tokenizer Lab</button>
+      <button class="nav-tab" data-tab="tab-embeddings">📐 Embeddings & Vectors</button>
+      <button class="nav-tab" data-tab="tab-sampling">🎲 Temperature & Sampling</button>
+      <button class="nav-tab" data-tab="tab-rag">📚 RAG Vector DB</button>
+      <button class="nav-tab" data-tab="tab-guide">📖 How AI Works Guide</button>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-container">
+
+    <!-- ==================== TAB 1: GLASS-BOX CHAT ==================== -->
+    <section id="tab-chat" class="tab-pane active">
+      <div class="chat-layout">
+        <!-- Left: Chat Conversation Window -->
+        <div class="chat-left-col">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <span class="status-indicator"></span>
+              <h2>Interactive Dialogue</h2>
+            </div>
+            <div class="controls-row">
+              <label class="toggle-control" title="Enable Retrieval-Augmented Generation">
+                <input type="checkbox" id="chatRagToggle" checked>
+                <span class="toggle-label">Enable RAG</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Suggested Prompts for Quick Learning -->
+          <div class="quick-prompts-bar">
+            <span class="quick-label">Try asking:</span>
+            <button class="quick-btn" onclick="sendQuickPrompt('What is a Transformer and Self-Attention?')">Transformers</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('Why do LLMs struggle to count letters in strawberry?')">Tokenization</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('How do embeddings represent words as vectors?')">Embeddings</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('How does Temperature affect AI creativity?')">Temperature</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('Explain Backpropagation and Gradient Descent')">Backpropagation</button>
+          </div>
+
+          <!-- Message History -->
+          <div class="messages-container" id="chatMessages">
+            <div class="message-bubble bot-bubble">
+              <div class="msg-header">
+                <span class="sender-name">🤖 Glass-Box AI</span>
+                <span class="msg-time">Just now</span>
+              </div>
+              <div class="msg-content">
+                <p>Welcome! I am an <strong>educational "glass-box" chatbot</strong> designed to show you what actually happens under the hood of an AI model.</p>
+                <p>Whenever you send me a prompt, look at the <strong>Telemetry Panel on the right</strong>. You will see:</p>
+                <ul>
+                  <li>How your text is chopped into <strong>subword tokens & IDs</strong>.</li>
+                  <li>How your prompt is turned into a <strong>vector</strong> to search relevant knowledge (<strong>RAG</strong>).</li>
+                  <li>How the model calculates <strong>Logits</strong> and uses <strong>Temperature</strong> to predict the next word!</li>
+                </ul>
+                <p>Type any question below or click one of the suggested topics above to begin.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input Bar -->
+          <form class="chat-input-bar" id="chatForm">
+            <div class="sliders-inline">
+              <div class="slider-item">
+                <label>Temp: <span id="tempVal">0.7</span></label>
+                <input type="range" id="chatTemp" min="0.1" max="2.0" step="0.1" value="0.7">
+              </div>
+              <div class="slider-item">
+                <label>Top-P: <span id="topPVal">0.9</span></label>
+                <input type="range" id="chatTopP" min="0.1" max="1.0" step="0.05" value="0.9">
+              </div>
+              <div class="slider-item">
+                <label>Top-K: <span id="topKVal">40</span></label>
+                <input type="range" id="chatTopK" min="1" max="100" step="5" value="40">
+              </div>
+            </div>
+            <div class="input-row">
+              <input type="text" id="chatInput" placeholder="Ask about AI concepts or any question..." autocomplete="off" required>
+              <button type="submit" id="chatSubmitBtn" class="primary-btn">
+                <span>Send</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right: Real-Time Glass-Box Telemetry -->
+        <div class="chat-right-col">
+          <div class="panel-header">
+            <h2>🔬 Glass-Box Pipeline Telemetry</h2>
+            <span class="telemetry-badge" id="telemetryBadge">Ready</span>
+          </div>
+
+          <div class="telemetry-content" id="telemetryContent">
+            <!-- Stage 1 -->
+            <div class="telemetry-card">
+              <div class="card-step-badge">Stage 1</div>
+              <h3>🔤 Tokenization (Subword BPE)</h3>
+              <p class="card-desc">The neural network cannot read letters. It converts text into vocabulary token IDs.</p>
+              <div id="telemetryTokens" class="tokens-chip-box">
+                <span class="placeholder-text">Tokens will appear here when you send a message.</span>
+              </div>
+              <div class="stats-mini-row" id="telemetryTokenStats">
+                <div>Chars: <span class="stat-highlight" id="statChars">-</span></div>
+                <div>Tokens: <span class="stat-highlight" id="statTokens">-</span></div>
+                <div>Ratio: <span class="stat-highlight" id="statRatio">-</span> chars/token</div>
+              </div>
+            </div>
+
+            <!-- Stage 2 -->
+            <div class="telemetry-card">
+              <div class="card-step-badge">Stage 2</div>
+              <h3>📐 Semantic Vector Search (RAG)</h3>
+              <p class="card-desc">The query is converted into an embedding vector and compared against memory via Cosine Similarity.</p>
+              <div id="telemetryRagBox" class="rag-results-box">
+                <span class="placeholder-text">Retrieved knowledge snippets will appear here.</span>
+              </div>
+            </div>
+
+            <!-- Stage 3 -->
+            <div class="telemetry-card">
+              <div class="card-step-badge">Stage 3</div>
+              <h3>📦 Prompt Assembly & Context Window</h3>
+              <p class="card-desc">System instructions, retrieved facts, and user query are assembled into the input context.</p>
+              <div class="code-preview" id="telemetryPromptBox">
+                <pre><code id="telemetryPromptCode">// Prompt assembly preview</code></pre>
+              </div>
+            </div>
+
+            <!-- Stage 4 -->
+            <div class="telemetry-card">
+              <div class="card-step-badge">Stage 4</div>
+              <h3>🎲 Next-Token Probability Prediction</h3>
+              <p class="card-desc">The model outputs Logits for all words. Softmax & Temperature determine the next token.</p>
+              <div id="telemetrySamplingBox">
+                <span class="placeholder-text">Autoregressive token predictions will appear here.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: TOKENIZER LAB ==================== -->
+    <section id="tab-tokenizer" class="tab-pane">
+      <div class="section-hero">
+        <h2>🔤 The Tokenizer Laboratory</h2>
+        <p>Explore why LLMs read in tokens rather than words or letters, and why they struggle with tasks like counting letters in "strawberry".</p>
+      </div>
+
+      <div class="lab-card">
+        <div class="input-group">
+          <label for="tokInputText"><strong>Enter Text to Analyze:</strong></label>
+          <div class="input-with-action">
+            <textarea id="tokInputText" rows="3" class="custom-textarea">The transformer neural network uses self-attention to generate embeddings and predictions.</textarea>
+            <button class="primary-btn" id="tokAnalyzeBtn">Tokenize Text</button>
+          </div>
+        </div>
+
+        <div class="tok-presets">
+          <span>Presets:</span>
+          <button class="pill-btn" onclick="setTokPreset('strawberry')">"strawberry"</button>
+          <button class="pill-btn" onclick="setTokPreset('def calculate_loss(y_true, y_pred):')">Python Code</button>
+          <button class="pill-btn" onclick="setTokPreset('antidisestablishmentarianism')">Rare Long Word</button>
+          <button class="pill-btn" onclick="setTokPreset('12345 + 67890 = 80235')">Math Equation</button>
+        </div>
+
+        <div class="comparison-grid">
+          <!-- BPE -->
+          <div class="comp-box featured-box">
+            <div class="comp-header">
+              <h3>1. Byte-Pair Encoding (Subword BPE)</h3>
+              <span class="tag-pill tag-primary">Modern LLM Standard</span>
+            </div>
+            <p class="comp-desc">Splits frequent words whole, while novel words are segmented into common roots & suffixes.</p>
+            <div class="tokens-display" id="bpeDisplayChips"></div>
+            <div class="comp-footer">
+              <div>Tokens: <strong id="bpeCount">0</strong></div>
+              <div>Compression: <strong id="bpeRatio">0</strong> chars/token</div>
+            </div>
+          </div>
+
+          <!-- Word -->
+          <div class="comp-box">
+            <div class="comp-header">
+              <h3>2. Word Tokenizer</h3>
+              <span class="tag-pill tag-warning">Legacy NLP</span>
+            </div>
+            <p class="comp-desc">Splits strictly on spaces and punctuation. Requires huge vocabularies and fails on misspellings.</p>
+            <div class="tokens-display" id="wordDisplayChips"></div>
+            <div class="comp-footer">
+              <div>Tokens: <strong id="wordCount">0</strong></div>
+            </div>
+          </div>
+
+          <!-- Char -->
+          <div class="comp-box">
+            <div class="comp-header">
+              <h3>3. Character Tokenizer</h3>
+              <span class="tag-pill tag-danger">Slow / High Memory</span>
+            </div>
+            <p class="comp-desc">Every character is a token. Tiny vocabulary, but token sequences are huge ($O(N^2)$ attention explodes).</p>
+            <div class="tokens-display" id="charDisplayChips"></div>
+            <div class="comp-footer">
+              <div>Tokens: <strong id="charCount">0</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Educational Insight Box -->
+        <div class="insight-box">
+          <h4>💡 Why does this matter in AI?</h4>
+          <p>When you ask an AI model <em>"How many 'r's are in strawberry?"</em>, it doesn't see <code>s - t - r - a - w - b - e - r - r - y</code>. It sees token IDs like <code>[straw, berry]</code>. Because the characters are compressed inside the token, the AI has to guess or perform multi-step reasoning to count internal letters!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: EMBEDDINGS & VECTORS ==================== -->
+    <section id="tab-embeddings" class="tab-pane">
+      <div class="section-hero">
+        <h2>📐 Embeddings & Semantic Vector Space</h2>
+        <p>In AI, concepts become points in high-dimensional space. "Meaning" is measured by geometric angles and distances.</p>
+      </div>
+
+      <div class="embeddings-grid">
+        <!-- Cosine Similarity Calculator -->
+        <div class="lab-card">
+          <h3>1. Cosine Similarity Calculator</h3>
+          <p class="card-desc">Calculate the semantic similarity score between two words or sentences.</p>
+          
+          <div class="pair-inputs">
+            <div class="input-field">
+              <label>Concept / Word A:</label>
+              <input type="text" id="simWordA" value="king" class="custom-input">
+            </div>
+            <div class="input-field">
+              <label>Concept / Word B:</label>
+              <input type="text" id="simWordB" value="queen" class="custom-input">
+            </div>
+          </div>
+
+          <div class="tok-presets">
+            <span>Try pairs:</span>
+            <button class="pill-btn" onclick="setSimPair('king', 'queen')">King vs Queen</button>
+            <button class="pill-btn" onclick="setSimPair('dog', 'puppy')">Dog vs Puppy</button>
+            <button class="pill-btn" onclick="setSimPair('cat', 'computer')">Cat vs Computer</button>
+            <button class="pill-btn" onclick="setSimPair('artificial intelligence', 'machine learning')">AI vs ML</button>
+          </div>
+
+          <button class="primary-btn mt-2" id="calcSimBtn">Calculate Cosine Similarity</button>
+
+          <!-- Result Display -->
+          <div class="sim-result-card" id="simResultCard">
+            <div class="sim-gauge">
+              <div class="gauge-value" id="simScoreVal">94.5%</div>
+              <div class="gauge-label">Cosine Similarity</div>
+            </div>
+            <div class="sim-details">
+              <div class="detail-line"><strong>Angle ($\theta$):</strong> <span id="simAngleVal">19.2°</span></div>
+              <div class="detail-line"><strong>Dot Product ($A \cdot B$):</strong> <span id="simDotVal">0.945</span></div>
+              <div class="detail-line"><strong>Semantic Interpretation:</strong> <span id="simInterpVal" class="highlight-text">Extremely Similar</span></div>
+            </div>
+          </div>
+
+          <div class="math-explainer">
+            <p><strong>Mathematical Formula:</strong></p>
+            <code>Cosine Similarity = cos(θ) = (A · B) / (||A|| × ||B||)</code>
+            <p class="small-text">Score = 1.0 (identical direction, 0°), 0.0 (unrelated, 90°), -1.0 (opposite meaning, 180°).</p>
+          </div>
+        </div>
+
+        <!-- Vector Arithmetic Playground -->
+        <div class="lab-card">
+          <h3>2. Vector Arithmetic (Concept Algebra)</h3>
+          <p class="card-desc">The famous Word2Vec property: <code>King - Man + Woman = Queen</code>.</p>
+
+          <div class="arithmetic-inputs">
+            <div class="arith-row">
+              <span class="arith-symbol">+</span>
+              <input type="text" id="arithPos1" value="king" class="custom-input">
+              <span class="arith-symbol">-</span>
+              <input type="text" id="arithNeg1" value="man" class="custom-input">
+              <span class="arith-symbol">+</span>
+              <input type="text" id="arithPos2" value="woman" class="custom-input">
+              <span class="arith-symbol">=</span>
+              <button class="primary-btn" id="runArithBtn">Compute</button>
+            </div>
+          </div>
+
+          <div class="arith-result-box" id="arithResultBox">
+            <div class="winner-badge">
+              <span>Winning Nearest Neighbor:</span>
+              <strong id="arithWinnerWord" class="winner-word">queen</strong>
+            </div>
+            <h4>Nearest Neighbor Ranking:</h4>
+            <div class="matches-list" id="arithMatchesList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2D Semantic Map -->
+      <div class="lab-card mt-3">
+        <div class="panel-header">
+          <div>
+            <h3>3. 2D Semantic Projection Map (PCA Visualization)</h3>
+            <p class="card-desc">High-dimensional (16D) vectors compressed to 2D coordinates using Principal Component Analysis.</p>
+          </div>
+          <button class="secondary-btn" id="reloadPcaBtn">Refresh Map</button>
+        </div>
+        <div class="pca-canvas-container">
+          <canvas id="pcaCanvas" width="900" height="450"></canvas>
+        </div>
+        <div class="pca-legend">
+          <span class="legend-dot dot-royalty"></span> Royalty & People
+          <span class="legend-dot dot-animals"></span> Animals
+          <span class="legend-dot dot-tech"></span> Technology & AI
+          <span class="legend-dot dot-food"></span> Food
+          <span class="legend-dot dot-vehicles"></span> Vehicles
+          <span class="legend-dot dot-emotions"></span> Emotions
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: TEMPERATURE & SAMPLING ==================== -->
+    <section id="tab-sampling" class="tab-pane">
+      <div class="section-hero">
+        <h2>🎲 Temperature, Top-K & Top-P (Softmax Sampling)</h2>
+        <p>Witness how raw neural network scores (Logits) turn into probabilities, and how sampling settings control AI creativity vs determinism.</p>
+      </div>
+
+      <div class="sampling-layout">
+        <!-- Controls Column -->
+        <div class="lab-card">
+          <h3>Sampling Controls</h3>
+          
+          <div class="slider-control-group">
+            <div class="slider-header">
+              <label><strong>Temperature ($T$):</strong></label>
+              <span class="slider-badge" id="labTempBadge">1.0</span>
+            </div>
+            <input type="range" id="labTempSlider" min="0.05" max="2.0" step="0.05" value="1.0">
+            <div class="slider-ticks">
+              <span>0.1 (Greedy / Robotic)</span>
+              <span>1.0 (Balanced)</span>
+              <span>2.0 (Wild / Chaotic)</span>
+            </div>
+          </div>
+
+          <div class="slider-control-group">
+            <div class="slider-header">
+              <label><strong>Top-K:</strong></label>
+              <span class="slider-badge" id="labTopKBadge">6</span>
+            </div>
+            <input type="range" id="labTopKSlider" min="1" max="6" step="1" value="6">
+            <p class="slider-hint">Keeps only the top $K$ most likely candidates, discarding all others.</p>
+          </div>
+
+          <div class="slider-control-group">
+            <div class="slider-header">
+              <label><strong>Top-P (Nucleus):</strong></label>
+              <span class="slider-badge" id="labTopPBadge">1.0</span>
+            </div>
+            <input type="range" id="labTopPSlider" min="0.2" max="1.0" step="0.05" value="1.0">
+            <p class="slider-hint">Keeps candidates until cumulative probability reaches $P$.</p>
+          </div>
+
+          <div class="context-scenario-box">
+            <h4>Prompt Scenario:</h4>
+            <p><em>"In the morning, before starting work, I love to drink a cup of hot [____]?"</em></p>
+          </div>
+
+          <button class="primary-btn w-full mt-2" id="sampleTokenBtn">🎲 Sample Next Token</button>
+          
+          <div class="winner-sampling-result" id="samplingWinnerBox">
+            <span>Sampled Winner:</span>
+            <strong id="samplingWinnerWord">-</strong>
+          </div>
+        </div>
+
+        <!-- Visual Probability Distribution -->
+        <div class="lab-card">
+          <div class="panel-header">
+            <h3>Probability Distribution</h3>
+            <span class="tag-pill tag-primary">Softmax Output</span>
+          </div>
+
+          <div class="bars-container" id="probabilityBars">
+            <!-- Dynamic bars rendered by JS -->
+          </div>
+
+          <!-- Dynamic Educational Callout -->
+          <div class="notes-box" id="samplingNotesBox">
+            <p>Adjust the sliders to see how the probability distribution reshapes!</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: RAG VECTOR DB ==================== -->
+    <section id="tab-rag" class="tab-pane">
+      <div class="section-hero">
+        <h2>📚 Retrieval-Augmented Generation (RAG)</h2>
+        <p>See how LLMs connect to private knowledge bases to give accurate, grounded answers without hallucinations.</p>
+      </div>
+
+      <div class="rag-layout">
+        <!-- Live Semantic Search -->
+        <div class="lab-card">
+          <h3>1. Test Semantic Search Query</h3>
+          <p class="card-desc">Type any question to see how the vector database ranks relevant document chunks.</p>
+
+          <div class="input-with-action">
+            <input type="text" id="ragSearchInput" placeholder="e.g. How does self-attention work?" class="custom-input">
+            <button class="primary-btn" id="ragSearchBtn">Search Vector DB</button>
+          </div>
+
+          <div class="search-results-list" id="ragSearchResults">
+            <span class="placeholder-text">Search results with cosine similarity scores will appear here.</span>
+          </div>
+        </div>
+
+        <!-- Add Custom Knowledge Document -->
+        <div class="lab-card">
+          <h3>2. Add Custom Document to Knowledge Base</h3>
+          <p class="card-desc">Teach the chatbot new facts! The system will automatically compute vector embeddings.</p>
+
+          <form id="addDocForm">
+            <div class="input-field">
+              <label>Document Title:</label>
+              <input type="text" id="docTitle" placeholder="e.g. Company Return Policy" class="custom-input" required>
+            </div>
+            <div class="input-field">
+              <label>Topic Category:</label>
+              <input type="text" id="docTopic" placeholder="e.g. Business / Policy" class="custom-input" required>
+            </div>
+            <div class="input-field">
+              <label>Document Content (Paragraph):</label>
+              <textarea id="docContent" rows="4" placeholder="Enter facts or knowledge here..." class="custom-textarea" required></textarea>
+            </div>
+            <button type="submit" class="primary-btn mt-2">📥 Index & Embed Document</button>
+          </form>
+
+          <div class="knowledge-docs-list-header mt-3">
+            <h4>Existing Indexed Documents (<span id="totalDocsCount">0</span>)</h4>
+          </div>
+          <div class="docs-accordion" id="docsAccordion"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 6: HOW AI WORKS GUIDE ==================== -->
+    <section id="tab-guide" class="tab-pane">
+      <div class="section-hero">
+        <h2>📖 The Complete Guide: How AI Actually Works</h2>
+        <p>A crystal-clear, intuitive roadmap to the mathematics and computer science behind modern AI.</p>
+      </div>
+
+      <div class="guide-grid">
+        <div class="guide-card">
+          <div class="guide-num">01</div>
+          <h3>The Core Concept: Next-Token Prediction</h3>
+          <p>At their core, Large Language Models (LLMs) are not conscious thinking entities. They are <strong>probabilistic sequence completion engines</strong>.</p>
+          <p>Given a sequence of words $w_1, w_2, \dots, w_t$, the model calculates a probability distribution over its entire vocabulary to predict what token $w_{t+1}$ should come next.</p>
+          <div class="guide-box"><code>P(next_word | previous_words)</code></div>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">02</div>
+          <h3>From Text to Numbers: Tokenization</h3>
+          <p>Computers cannot multiply letters. Text must be converted to numbers:</p>
+          <ul>
+            <li><strong>Vocabulary:</strong> A master dictionary of 32,000 to 256,000 subwords.</li>
+            <li><strong>Byte-Pair Encoding (BPE):</strong> Breaks rare or long words into subwords.</li>
+            <li><strong>Token IDs:</strong> Each subword receives a permanent integer ID.</li>
+          </ul>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">03</div>
+          <h3>Vectors & Embeddings: Geometry of Meaning</h3>
+          <p>A word ID is just an arbitrary index. To give it meaning, the model maps each ID to an <strong>Embedding Vector</strong>—a list of hundreds or thousands of floating point numbers.</p>
+          <p>In this high-dimensional geometry, similar concepts cluster together, and relationships like <code>King - Man + Woman = Queen</code> emerge organically.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">04</div>
+          <h3>The Transformer Engine: Self-Attention</h3>
+          <p>How does a word know its context? In <em>"The bank of the river"</em>, how does "bank" know it's not a financial bank?</p>
+          <p><strong>Self-Attention</strong> solves this by computing three vectors for every token:</p>
+          <ul>
+            <li><strong>Query ($Q$):</strong> What am I looking for?</li>
+            <li><strong>Key ($K$):</strong> What do I offer?</li>
+            <li><strong>Value ($V$):</strong> What information do I hold?</li>
+          </ul>
+          <div class="guide-box"><code>Attention(Q, K, V) = softmax(Q·Kᵀ / √d) · V</code></div>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">05</div>
+          <h3>How Neural Networks Learn: Loss & Backprop</h3>
+          <p>Training happens in iterative loops across billions of words:</p>
+          <ol>
+            <li><strong>Forward Pass:</strong> The model guesses the next word.</li>
+            <li><strong>Loss Function:</strong> Cross-Entropy loss calculates how wrong the guess was.</li>
+            <li><strong>Backpropagation:</strong> The chain rule of calculus calculates gradients for every weight.</li>
+            <li><strong>Optimizer (AdamW):</strong> Weights are nudged in the direction that lowers the loss.</li>
+          </ol>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">06</div>
+          <h3>The 3 Stages of Modern AI Creation</h3>
+          <div class="lifecycle-steps">
+            <div class="life-step">
+              <strong>1. Pre-training:</strong> Reading trillions of internet tokens. Teaches language, logic, and common sense. Produces a <em>Base Model</em>.
+            </div>
+            <div class="life-step">
+              <strong>2. Instruction Tuning (SFT):</strong> Training on high-quality Q&A pairs to transform the raw text predictor into an assistant.
+            </div>
+            <div class="life-step">
+              <strong>3. RLHF / Alignment:</strong> Reinforcement Learning from Human Feedback. Teaches the bot to be helpful, honest, and harmless.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
