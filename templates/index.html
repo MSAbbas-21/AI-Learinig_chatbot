@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Under The Hood — Interactive Learning Chatbot</title>
+  <title>Real-Time AI Glass-Box Chatbot & Architecture Studio</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,14 +13,15 @@
   <!-- Top Navigation Header -->
   <header class="app-header">
     <div class="brand">
-      <div class="brand-icon">🧠</div>
+      <div class="brand-icon">⚡</div>
       <div>
-        <h1 class="brand-title">AI Built By Abbas</h1>
-        <p class="brand-subtitle">Interactive Learning Chatbot & Architecture Explorer</p>
+        <h1 class="brand-title">Real-Time AI Chatbot & Studio</h1>
+        <p class="brand-subtitle">Visualizing How Artificial Intelligence Works Under The Hood</p>
       </div>
     </div>
     <nav class="nav-tabs" id="navTabs">
-      <button class="nav-tab active" data-tab="tab-chat">💬 Glass-Box Chat</button>
+      <button class="nav-tab active" data-tab="tab-chat">💬 Real-Time Chat</button>
+      <button class="nav-tab" data-tab="tab-attention">⚡ Attention Engine</button>
       <button class="nav-tab" data-tab="tab-tokenizer">🔤 Tokenizer Lab</button>
       <button class="nav-tab" data-tab="tab-embeddings">📐 Embeddings & Vectors</button>
       <button class="nav-tab" data-tab="tab-sampling">🎲 Temperature & Sampling</button>
@@ -32,20 +33,24 @@
   <!-- Main Container -->
   <main class="app-container">
 
-    <!-- ==================== TAB 1: GLASS-BOX CHAT ==================== -->
+    <!-- ==================== TAB 1: REAL-TIME GLASS-BOX CHAT ==================== -->
     <section id="tab-chat" class="tab-pane active">
       <div class="chat-layout">
         <!-- Left: Chat Conversation Window -->
         <div class="chat-left-col">
           <div class="panel-header">
             <div class="panel-title-group">
-              <span class="status-indicator"></span>
-              <h2>Interactive Dialogue</h2>
+              <span class="status-indicator" id="streamStatusIndicator"></span>
+              <h2 id="chatHeading">Interactive Real-Time Dialogue</h2>
             </div>
             <div class="controls-row">
               <label class="toggle-control" title="Enable Retrieval-Augmented Generation">
                 <input type="checkbox" id="chatRagToggle" checked>
                 <span class="toggle-label">Enable RAG</span>
+              </label>
+              <label class="toggle-control" title="Stream tokens live via Server-Sent Events">
+                <input type="checkbox" id="chatStreamToggle" checked>
+                <span class="toggle-label">Live Stream (SSE)</span>
               </label>
             </div>
           </div>
@@ -53,36 +58,52 @@
           <!-- Suggested Prompts for Quick Learning -->
           <div class="quick-prompts-bar">
             <span class="quick-label">Try asking:</span>
+            <button class="quick-btn" onclick="sendQuickPrompt('How does AI work in real time?')">Real-Time Inference</button>
             <button class="quick-btn" onclick="sendQuickPrompt('What is a Transformer and Self-Attention?')">Transformers</button>
-            <button class="quick-btn" onclick="sendQuickPrompt('Why do LLMs struggle to count letters in strawberry?')">Tokenization</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('Why do LLMs struggle to count letters in strawberry?')">Strawberry Problem</button>
             <button class="quick-btn" onclick="sendQuickPrompt('How do embeddings represent words as vectors?')">Embeddings</button>
             <button class="quick-btn" onclick="sendQuickPrompt('How does Temperature affect AI creativity?')">Temperature</button>
-            <button class="quick-btn" onclick="sendQuickPrompt('Explain Backpropagation and Gradient Descent')">Backpropagation</button>
+            <button class="quick-btn" onclick="sendQuickPrompt('How does RAG eliminate hallucinations?')">RAG & Hallucinations</button>
           </div>
 
           <!-- Message History -->
           <div class="messages-container" id="chatMessages">
             <div class="message-bubble bot-bubble">
               <div class="msg-header">
-                <span class="sender-name">🤖 Glass-Box AI</span>
+                <span class="sender-name">🤖 Real-Time Glass-Box AI</span>
                 <span class="msg-time">Just now</span>
               </div>
               <div class="msg-content">
-                <p>Welcome! I am an <strong>educational "glass-box" chatbot</strong> designed to show you what actually happens under the hood of an AI model.</p>
-                <p>Whenever you send me a prompt, look at the <strong>Telemetry Panel on the right</strong>. You will see:</p>
+                <p>Welcome! I am an <strong>educational "glass-box" AI chatbot</strong> designed to show you what actually happens under the hood of an AI in real time.</p>
+                <p>When you ask a question, watch both this chat and the <strong>Real-Time Pipeline Telemetry HUD</strong> on the right:</p>
                 <ul>
-                  <li>How your text is chopped into <strong>subword tokens & IDs</strong>.</li>
-                  <li>How your prompt is turned into a <strong>vector</strong> to search relevant knowledge (<strong>RAG</strong>).</li>
-                  <li>How the model calculates <strong>Logits</strong> and uses <strong>Temperature</strong> to predict the next word!</li>
+                  <li><strong>Live Token-by-Token Streaming:</strong> See the model generate autoregressively in real time.</li>
+                  <li><strong>Live Next-Token Logit Race:</strong> Watch candidate tokens compete at each step.</li>
+                  <li><strong>Active Attention Link:</strong> See which context words the model attends to while choosing the next word!</li>
                 </ul>
-                <p>Type any question below or click one of the suggested topics above to begin.</p>
+                <p>Type any question below or click a suggested topic above to start.</p>
               </div>
             </div>
           </div>
 
-          <!-- Input Bar -->
+          <!-- Live As-You-Type Tokenizer Preview HUD -->
+          <div class="as-you-type-hud" id="typeHud">
+            <div class="type-hud-header">
+              <span>🔤 Live As-You-Type Tokenizer:</span>
+              <span id="typeHudStats">0 characters · 0 tokens</span>
+            </div>
+            <div class="type-hud-chips" id="typeHudChips">
+              <span class="placeholder-text-dim">Start typing below to see instant subword token segmentation...</span>
+            </div>
+          </div>
+
+          <!-- Input Bar & Stream Speed Controls -->
           <form class="chat-input-bar" id="chatForm">
             <div class="sliders-inline">
+              <div class="slider-item">
+                <label>Stream Speed: <span id="speedVal">30ms</span></label>
+                <input type="range" id="chatSpeed" min="5" max="150" step="5" value="30" title="Millisecond delay per token (lower = faster)">
+              </div>
               <div class="slider-item">
                 <label>Temp: <span id="tempVal">0.7</span></label>
                 <input type="range" id="chatTemp" min="0.1" max="2.0" step="0.1" value="0.7">
@@ -106,21 +127,97 @@
           </form>
         </div>
 
-        <!-- Right: Real-Time Glass-Box Telemetry -->
+        <!-- Right: Real-Time Glass-Box Telemetry HUD -->
         <div class="chat-right-col">
           <div class="panel-header">
-            <h2>🔬 Glass-Box Pipeline Telemetry</h2>
+            <h2>🔬 Real-Time Pipeline Telemetry HUD</h2>
             <span class="telemetry-badge" id="telemetryBadge">Ready</span>
           </div>
 
+          <!-- Live Pipeline Visual Flowchart -->
+          <div class="pipeline-flow-bar" id="pipelineFlowBar">
+            <div class="flow-step" id="flowStep1" title="Input Prompt">
+              <span class="step-num">1</span>
+              <span class="step-lbl">Prompt</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step" id="flowStep2" title="Byte-Pair Tokenizer">
+              <span class="step-num">2</span>
+              <span class="step-lbl">BPE Tokens</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step" id="flowStep3" title="Vector Embedding & RAG Search">
+              <span class="step-num">3</span>
+              <span class="step-lbl">RAG Vectors</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step" id="flowStep4" title="Self-Attention & Context Weights">
+              <span class="step-num">4</span>
+              <span class="step-lbl">Attention</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step" id="flowStep5" title="Logits & Softmax Sampling">
+              <span class="step-num">5</span>
+              <span class="step-lbl">Softmax</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step" id="flowStep6" title="Emitted Output Token">
+              <span class="step-num">6</span>
+              <span class="step-lbl">Emit Token</span>
+            </div>
+          </div>
+
+          <!-- Real-Time Metrics Header -->
+          <div class="live-metrics-strip" id="liveMetricsStrip">
+            <div class="metric-card">
+              <span class="m-val" id="mTokSec">0.0</span>
+              <span class="m-lbl">Tokens / Sec</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-val" id="mProgress">0%</span>
+              <span class="m-lbl">Completion</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-val" id="mElapsed">0ms</span>
+              <span class="m-lbl">Elapsed Time</span>
+            </div>
+            <div class="metric-card">
+              <span class="m-val" id="mTokenTotal">0</span>
+              <span class="m-lbl">Tokens Emitted</span>
+            </div>
+          </div>
+
           <div class="telemetry-content" id="telemetryContent">
-            <!-- Stage 1 -->
+            <!-- Real-Time Token Generation Inspector -->
+            <div class="telemetry-card live-highlight-card">
+              <div class="card-step-badge">Live Token Predictor</div>
+              <h3>⚡ Next-Token Candidate Probability Race</h3>
+              <p class="card-desc">For each word emitted, the model calculates logits across its vocabulary. Temperature shapes the probability bar.</p>
+              
+              <div class="live-token-info-row">
+                <div class="curr-token-box">
+                  <span class="sub-label">Current Token:</span>
+                  <code class="active-token-pill" id="liveCurrentToken">Waiting...</code>
+                </div>
+                <div class="curr-attn-box">
+                  <span class="sub-label">Attended To Context:</span>
+                  <code class="attended-token-pill" id="liveAttendedToken">-</code>
+                </div>
+              </div>
+
+              <!-- Animated Candidate Bars -->
+              <div class="live-candidates-container" id="liveCandidatesList">
+                <span class="placeholder-text">Candidate logits will race here in real time as tokens generate...</span>
+              </div>
+            </div>
+
+            <!-- Stage 1: Tokenization -->
             <div class="telemetry-card">
               <div class="card-step-badge">Stage 1</div>
-              <h3>🔤 Tokenization (Subword BPE)</h3>
-              <p class="card-desc">The neural network cannot read letters. It converts text into vocabulary token IDs.</p>
+              <h3>🔤 Input Tokenization (Subword BPE)</h3>
+              <p class="card-desc">Human text decomposed into vocabulary subword IDs.</p>
               <div id="telemetryTokens" class="tokens-chip-box">
-                <span class="placeholder-text">Tokens will appear here when you send a message.</span>
+                <span class="placeholder-text">Input tokens will appear here.</span>
               </div>
               <div class="stats-mini-row" id="telemetryTokenStats">
                 <div>Chars: <span class="stat-highlight" id="statChars">-</span></div>
@@ -129,33 +226,23 @@
               </div>
             </div>
 
-            <!-- Stage 2 -->
+            <!-- Stage 2: RAG Retrieval -->
             <div class="telemetry-card">
               <div class="card-step-badge">Stage 2</div>
               <h3>📐 Semantic Vector Search (RAG)</h3>
-              <p class="card-desc">The query is converted into an embedding vector and compared against memory via Cosine Similarity.</p>
+              <p class="card-desc">Query converted to a vector embedding and searched via Cosine Similarity.</p>
               <div id="telemetryRagBox" class="rag-results-box">
                 <span class="placeholder-text">Retrieved knowledge snippets will appear here.</span>
               </div>
             </div>
 
-            <!-- Stage 3 -->
+            <!-- Stage 3: Prompt Assembly -->
             <div class="telemetry-card">
               <div class="card-step-badge">Stage 3</div>
               <h3>📦 Prompt Assembly & Context Window</h3>
-              <p class="card-desc">System instructions, retrieved facts, and user query are assembled into the input context.</p>
+              <p class="card-desc">Assembled prompt passed into the Transformer context window.</p>
               <div class="code-preview" id="telemetryPromptBox">
                 <pre><code id="telemetryPromptCode">// Prompt assembly preview</code></pre>
-              </div>
-            </div>
-
-            <!-- Stage 4 -->
-            <div class="telemetry-card">
-              <div class="card-step-badge">Stage 4</div>
-              <h3>🎲 Next-Token Probability Prediction</h3>
-              <p class="card-desc">The model outputs Logits for all words. Softmax & Temperature determine the next token.</p>
-              <div id="telemetrySamplingBox">
-                <span class="placeholder-text">Autoregressive token predictions will appear here.</span>
               </div>
             </div>
           </div>
@@ -163,7 +250,79 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 2: TOKENIZER LAB ==================== -->
+    <!-- ==================== TAB 2: ATTENTION ENGINE ==================== -->
+    <section id="tab-attention" class="tab-pane">
+      <div class="section-hero">
+        <h2>⚡ Transformer Self-Attention Engine</h2>
+        <p>Interactive Multi-Head Attention: See how words mathematically connect to each other across a sentence using $\text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V$.</p>
+      </div>
+
+      <div class="attention-layout">
+        <div class="lab-card">
+          <div class="panel-header">
+            <h3>1. Input Sentence & Multi-Head Selection</h3>
+            <span class="tag-pill tag-primary">Live Attention Weights</span>
+          </div>
+
+          <div class="input-with-action">
+            <input type="text" id="attSentenceInput" class="custom-input" value="The animal didn't cross the street because it was too tired">
+            <button class="primary-btn" id="attComputeBtn">Compute Attention</button>
+          </div>
+
+          <div class="tok-presets">
+            <span>Famous NLP Presets:</span>
+            <button class="pill-btn" onclick="setAttPreset('The animal didn\'t cross the street because it was too tired', 'coreference')">"animal ... it was too tired"</button>
+            <button class="pill-btn" onclick="setAttPreset('The animal didn\'t cross the street because it was too wide', 'coreference')">"street ... it was too wide"</button>
+            <button class="pill-btn" onclick="setAttPreset('The bank by the river had muddy water', 'coreference')">"bank by river"</button>
+            <button class="pill-btn" onclick="setAttPreset('The bank approved the loan with high interest', 'coreference')">"bank approved loan"</button>
+            <button class="pill-btn" onclick="setAttPreset('The robot charged its battery before it shut down', 'coreference')">"robot charged battery"</button>
+          </div>
+
+          <div class="head-selector-bar mt-2">
+            <span>Select Attention Head:</span>
+            <button class="head-btn active" data-head="coreference">🧠 Head 1: Coreference (it ➔ animal)</button>
+            <button class="head-btn" data-head="syntactic">🔀 Head 2: Syntactic Dependencies</button>
+            <button class="head-btn" data-head="locality">📍 Head 3: Locality & Neighbors</button>
+            <button class="head-btn" data-head="global">🌐 Head 4: Global Salience</button>
+          </div>
+          <p class="head-explainer-text" id="headExplainerText">Resolves pronouns ('it', 'they') to their antecedent nouns based on context.</p>
+
+          <!-- Interactive Token Attention Arc Web -->
+          <div class="attention-arc-container mt-3">
+            <h4>Hover over any token to inspect its attention connections:</h4>
+            <div class="token-arcs-row" id="tokenArcsRow">
+              <!-- Rendered dynamically -->
+            </div>
+            <div class="arc-focus-card" id="arcFocusCard">
+              <span class="placeholder-text">Hover or click a token above to inspect which words it attends to!</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attention Matrix Heatmap -->
+        <div class="lab-card">
+          <div class="panel-header">
+            <h3>2. Attention Weight Matrix Heatmap ($N \times N$)</h3>
+            <span class="formula-tag">$\text{Softmax}(Q K^T / \sqrt{d})$</span>
+          </div>
+          <p class="card-desc">Rows = Query tokens ($Q$). Columns = Key tokens ($K$). Higher color intensity indicates stronger attention connection (0.0 to 1.0).</p>
+          
+          <div class="heatmap-scroll-wrapper">
+            <div id="attentionHeatmapGrid" class="heatmap-grid">
+              <!-- Matrix rendered via JS -->
+            </div>
+          </div>
+
+          <div class="heatmap-legend">
+            <span class="legend-scale">0.0 (Zero Attention)</span>
+            <div class="legend-gradient-bar"></div>
+            <span class="legend-scale">1.0 (100% Attention)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: TOKENIZER LAB ==================== -->
     <section id="tab-tokenizer" class="tab-pane">
       <div class="section-hero">
         <h2>🔤 The Tokenizer Laboratory</h2>
@@ -229,7 +388,6 @@
           </div>
         </div>
 
-        <!-- Educational Insight Box -->
         <div class="insight-box">
           <h4>💡 Why does this matter in AI?</h4>
           <p>When you ask an AI model <em>"How many 'r's are in strawberry?"</em>, it doesn't see <code>s - t - r - a - w - b - e - r - r - y</code>. It sees token IDs like <code>[straw, berry]</code>. Because the characters are compressed inside the token, the AI has to guess or perform multi-step reasoning to count internal letters!</p>
@@ -237,7 +395,7 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 3: EMBEDDINGS & VECTORS ==================== -->
+    <!-- ==================== TAB 4: EMBEDDINGS & VECTORS ==================== -->
     <section id="tab-embeddings" class="tab-pane">
       <div class="section-hero">
         <h2>📐 Embeddings & Semantic Vector Space</h2>
@@ -271,7 +429,6 @@
 
           <button class="primary-btn mt-2" id="calcSimBtn">Calculate Cosine Similarity</button>
 
-          <!-- Result Display -->
           <div class="sim-result-card" id="simResultCard">
             <div class="sim-gauge">
               <div class="gauge-value" id="simScoreVal">94.5%</div>
@@ -343,7 +500,7 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 4: TEMPERATURE & SAMPLING ==================== -->
+    <!-- ==================== TAB 5: TEMPERATURE & SAMPLING ==================== -->
     <section id="tab-sampling" class="tab-pane">
       <div class="section-hero">
         <h2>🎲 Temperature, Top-K & Top-P (Softmax Sampling)</h2>
@@ -351,7 +508,6 @@
       </div>
 
       <div class="sampling-layout">
-        <!-- Controls Column -->
         <div class="lab-card">
           <h3>Sampling Controls</h3>
           
@@ -399,18 +555,14 @@
           </div>
         </div>
 
-        <!-- Visual Probability Distribution -->
         <div class="lab-card">
           <div class="panel-header">
             <h3>Probability Distribution</h3>
             <span class="tag-pill tag-primary">Softmax Output</span>
           </div>
 
-          <div class="bars-container" id="probabilityBars">
-            <!-- Dynamic bars rendered by JS -->
-          </div>
+          <div class="bars-container" id="probabilityBars"></div>
 
-          <!-- Dynamic Educational Callout -->
           <div class="notes-box" id="samplingNotesBox">
             <p>Adjust the sliders to see how the probability distribution reshapes!</p>
           </div>
@@ -418,7 +570,7 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 5: RAG VECTOR DB ==================== -->
+    <!-- ==================== TAB 6: RAG VECTOR DB ==================== -->
     <section id="tab-rag" class="tab-pane">
       <div class="section-hero">
         <h2>📚 Retrieval-Augmented Generation (RAG)</h2>
@@ -426,7 +578,6 @@
       </div>
 
       <div class="rag-layout">
-        <!-- Live Semantic Search -->
         <div class="lab-card">
           <h3>1. Test Semantic Search Query</h3>
           <p class="card-desc">Type any question to see how the vector database ranks relevant document chunks.</p>
@@ -441,7 +592,6 @@
           </div>
         </div>
 
-        <!-- Add Custom Knowledge Document -->
         <div class="lab-card">
           <h3>2. Add Custom Document to Knowledge Base</h3>
           <p class="card-desc">Teach the chatbot new facts! The system will automatically compute vector embeddings.</p>
@@ -470,24 +620,32 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 6: HOW AI WORKS GUIDE ==================== -->
+    <!-- ==================== TAB 7: HOW AI WORKS GUIDE ==================== -->
     <section id="tab-guide" class="tab-pane">
       <div class="section-hero">
-        <h2>📖 The Complete Guide: How AI Actually Works</h2>
-        <p>A crystal-clear, intuitive roadmap to the mathematics and computer science behind modern AI.</p>
+        <h2>📖 The Complete Guide: How AI Actually Works in Real Time</h2>
+        <p>A crystal-clear, intuitive roadmap to the mathematics, computer science, and real-time mechanics of modern AI.</p>
       </div>
 
       <div class="guide-grid">
         <div class="guide-card">
           <div class="guide-num">01</div>
-          <h3>The Core Concept: Next-Token Prediction</h3>
-          <p>At their core, Large Language Models (LLMs) are not conscious thinking entities. They are <strong>probabilistic sequence completion engines</strong>.</p>
-          <p>Given a sequence of words $w_1, w_2, \dots, w_t$, the model calculates a probability distribution over its entire vocabulary to predict what token $w_{t+1}$ should come next.</p>
-          <div class="guide-box"><code>P(next_word | previous_words)</code></div>
+          <h3>Real-Time Inference: Autoregressive Streaming</h3>
+          <p>Why do ChatGPT and Gemini type words out in real time rather than delivering whole paragraphs at once?</p>
+          <p>LLMs are <strong>autoregressive sequence generators</strong>: to generate word $N$, the neural network passes all words $1 \dots N-1$ through the model, predicts word $N$, appends it, and repeats. Through <strong>Server-Sent Events (SSE)</strong>, tokens stream to your screen the instant they are sampled.</p>
+          <div class="guide-box"><code>y[t] = Model(y[1], y[2], ... y[t-1])</code></div>
         </div>
 
         <div class="guide-card">
           <div class="guide-num">02</div>
+          <h3>The KV Cache (Key-Value Cache in GPUs)</h3>
+          <p>If a model had to recalculate attention for 2,000 previous words for each new token, generation speed would crawl to a halt ($O(N^2)$).</p>
+          <p>Real-time AI uses a <strong>KV Cache</strong>: past Key and Value projection matrices are cached in high-speed GPU VRAM (HBM3). The GPU only calculates projections for the single newest token!</p>
+          <div class="guide-box"><code>Memory saved: O(N²) operations reduced to O(N) per step</code></div>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-num">03</div>
           <h3>From Text to Numbers: Tokenization</h3>
           <p>Computers cannot multiply letters. Text must be converted to numbers:</p>
           <ul>
@@ -498,19 +656,19 @@
         </div>
 
         <div class="guide-card">
-          <div class="guide-num">03</div>
+          <div class="guide-num">04</div>
           <h3>Vectors & Embeddings: Geometry of Meaning</h3>
-          <p>A word ID is just an arbitrary index. To give it meaning, the model maps each ID to an <strong>Embedding Vector</strong>—a list of hundreds or thousands of floating point numbers.</p>
+          <p>A word ID is just an arbitrary index. To give it meaning, the model maps each ID to an <strong>Embedding Vector</strong>—a list of floating point numbers.</p>
           <p>In this high-dimensional geometry, similar concepts cluster together, and relationships like <code>King - Man + Woman = Queen</code> emerge organically.</p>
         </div>
 
         <div class="guide-card">
-          <div class="guide-num">04</div>
+          <div class="guide-num">05</div>
           <h3>The Transformer Engine: Self-Attention</h3>
-          <p>How does a word know its context? In <em>"The bank of the river"</em>, how does "bank" know it's not a financial bank?</p>
-          <p><strong>Self-Attention</strong> solves this by computing three vectors for every token:</p>
+          <p>In <em>"The bank of the river"</em>, how does "bank" know it's a shoreline rather than a financial bank?</p>
+          <p><strong>Self-Attention</strong> computes three vectors for every token:</p>
           <ul>
-            <li><strong>Query ($Q$):</strong> What am I looking for?</li>
+            <li><strong>Query ($Q$):</strong> What am I searching for?</li>
             <li><strong>Key ($K$):</strong> What do I offer?</li>
             <li><strong>Value ($V$):</strong> What information do I hold?</li>
           </ul>
@@ -518,31 +676,15 @@
         </div>
 
         <div class="guide-card">
-          <div class="guide-num">05</div>
+          <div class="guide-num">06</div>
           <h3>How Neural Networks Learn: Loss & Backprop</h3>
           <p>Training happens in iterative loops across billions of words:</p>
           <ol>
             <li><strong>Forward Pass:</strong> The model guesses the next word.</li>
-            <li><strong>Loss Function:</strong> Cross-Entropy loss calculates how wrong the guess was.</li>
-            <li><strong>Backpropagation:</strong> The chain rule of calculus calculates gradients for every weight.</li>
-            <li><strong>Optimizer (AdamW):</strong> Weights are nudged in the direction that lowers the loss.</li>
+            <li><strong>Loss Function:</strong> Cross-Entropy loss calculates error.</li>
+            <li><strong>Backpropagation:</strong> The chain rule computes gradients for every weight.</li>
+            <li><strong>Optimizer (AdamW):</strong> Weights are nudged to minimize error.</li>
           </ol>
-        </div>
-
-        <div class="guide-card">
-          <div class="guide-num">06</div>
-          <h3>The 3 Stages of Modern AI Creation</h3>
-          <div class="lifecycle-steps">
-            <div class="life-step">
-              <strong>1. Pre-training:</strong> Reading trillions of internet tokens. Teaches language, logic, and common sense. Produces a <em>Base Model</em>.
-            </div>
-            <div class="life-step">
-              <strong>2. Instruction Tuning (SFT):</strong> Training on high-quality Q&A pairs to transform the raw text predictor into an assistant.
-            </div>
-            <div class="life-step">
-              <strong>3. RLHF / Alignment:</strong> Reinforcement Learning from Human Feedback. Teaches the bot to be helpful, honest, and harmless.
-            </div>
-          </div>
         </div>
       </div>
     </section>

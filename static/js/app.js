@@ -1,10 +1,11 @@
 /**
- * AI Under The Hood — Interactive Studio Client
+ * Real-Time AI Chatbot & Architecture Studio Client
  */
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initChat();
+  initAttentionLab();
   initTokenizerLab();
   initEmbeddingsLab();
   initSamplingLab();
@@ -25,69 +26,363 @@ function initTabs() {
         targetPane.classList.add("active");
         if (tab.dataset.tab === "tab-embeddings") {
           loadPcaMap();
+        } else if (tab.dataset.tab === "tab-attention") {
+          if (!window._attentionLoaded) {
+            document.getElementById("attComputeBtn").click();
+            window._attentionLoaded = true;
+          }
         }
       }
     });
   });
 }
 
-/* ==================== 2. TAB 1: GLASS-BOX CHAT ==================== */
+/* ==================== 2. REAL-TIME GLASS-BOX CHAT ==================== */
 function initChat() {
   const form = document.getElementById("chatForm");
   const input = document.getElementById("chatInput");
-  const messagesBox = document.getElementById("chatMessages");
   const tempSlider = document.getElementById("chatTemp");
   const topPSlider = document.getElementById("chatTopP");
   const topKSlider = document.getElementById("chatTopK");
+  const speedSlider = document.getElementById("chatSpeed");
+  const streamToggle = document.getElementById("chatStreamToggle");
+  const ragToggle = document.getElementById("chatRagToggle");
 
   tempSlider.addEventListener("input", (e) => document.getElementById("tempVal").innerText = e.target.value);
   topPSlider.addEventListener("input", (e) => document.getElementById("topPVal").innerText = e.target.value);
   topKSlider.addEventListener("input", (e) => document.getElementById("topKVal").innerText = e.target.value);
+  speedSlider.addEventListener("input", (e) => document.getElementById("speedVal").innerText = `${e.target.value}ms`);
+
+  // Live As-You-Type Tokenizer HUD
+  let typeTimer = null;
+  input.addEventListener("input", () => {
+    clearTimeout(typeTimer);
+    const text = input.value;
+    if (!text) {
+      document.getElementById("typeHudStats").innerText = "0 characters · 0 tokens";
+      document.getElementById("typeHudChips").innerHTML = '<span class="placeholder-text-dim">Start typing below to see instant subword token segmentation...</span>';
+      return;
+    }
+
+    typeTimer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/tokenize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        const chipsBox = document.getElementById("typeHudChips");
+        chipsBox.innerHTML = "";
+        data.bpe.chips.forEach(chip => {
+          const el = document.createElement("span");
+          el.className = "token-chip";
+          el.style.backgroundColor = chip.color;
+          el.style.fontSize = "0.75rem";
+          el.style.padding = "2px 6px";
+          el.innerHTML = `${chip.is_space ? '␣' : escapeHtml(chip.token)} <span class="token-id-tag">#${chip.id}</span>`;
+          chipsBox.appendChild(el);
+        });
+        document.getElementById("typeHudStats").innerText = `${data.char_count} chars · ${data.bpe.token_count} BPE tokens (Ratio: ${data.bpe.compression_ratio})`;
+      } catch (e) {
+        // silent fail for quick typing
+      }
+    }, 150);
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const query = input.value.trim();
     if (!query) return;
 
-    // Append User Message
-    appendChatMessage("user", query);
+    // Reset input
     input.value = "";
+    document.getElementById("typeHudChips").innerHTML = '<span class="placeholder-text-dim">Start typing below to see instant subword token segmentation...</span>';
+    document.getElementById("typeHudStats").innerText = "0 characters · 0 tokens";
     input.disabled = true;
 
-    // Set badge to thinking
-    const badge = document.getElementById("telemetryBadge");
-    badge.innerText = "Processing...";
-    badge.style.color = "var(--warning)";
+    // Append User Message bubble
+    appendChatMessage("user", query);
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: query,
-          temperature: parseFloat(tempSlider.value),
-          top_p: parseFloat(topPSlider.value),
-          top_k: parseInt(topKSlider.value),
-          enable_rag: document.getElementById("chatRagToggle").checked
-        })
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        appendChatMessage("bot", `⚠️ Error: ${data.error}`);
-      } else {
-        appendChatMessage("bot", data.response);
-        renderChatTelemetry(data);
-      }
-    } catch (err) {
-      appendChatMessage("bot", `⚠️ Connection error: ${err.message}`);
-    } finally {
-      input.disabled = false;
-      input.focus();
-      badge.innerText = "Completed";
-      badge.style.color = "var(--success)";
+    const isStreaming = streamToggle.checked;
+    if (isStreaming) {
+      await handleStreamingChat(query);
+    } else {
+      await handleSyncChat(query);
     }
+
+    input.disabled = false;
+    input.focus();
   });
+}
+
+function updatePipelineStep(stepNum) {
+  for (let i = 1; i <= 6; i++) {
+    const el = document.getElementById(`flowStep${i}`);
+    if (!el) continue;
+    if (i < stepNum) {
+      el.className = "flow-step completed";
+    } else if (i === stepNum) {
+      el.className = "flow-step active";
+    } else {
+      el.className = "flow-step";
+    }
+  }
+}
+
+async function handleStreamingChat(query) {
+  const badge = document.getElementById("telemetryBadge");
+  const statusInd = document.getElementById("streamStatusIndicator");
+  badge.innerText = "Streaming...";
+  badge.style.color = "var(--warning)";
+  if (statusInd) statusInd.classList.add("busy");
+
+  // Create bot bubble with active cursor
+  const { bubble, contentEl, cursor } = createStreamingBotBubble();
+
+  // Highlight step 1: Prompt Input
+  updatePipelineStep(1);
+
+  const speedMs = parseInt(document.getElementById("chatSpeed").value) || 30;
+  const temp = parseFloat(document.getElementById("chatTemp").value) || 0.7;
+  const topK = parseInt(document.getElementById("chatTopK").value) || 40;
+  const topP = parseFloat(document.getElementById("chatTopP").value) || 0.9;
+  const enableRag = document.getElementById("chatRagToggle").checked;
+
+  let accumulatedText = "";
+  const url = `/api/chat/stream?message=${encodeURIComponent(query)}&temperature=${temp}&top_k=${topK}&top_p=${topP}&enable_rag=${enableRag}&delay_ms=${speedMs}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop(); // Keep unfinished tail
+
+      for (const block of lines) {
+        const line = block.trim();
+        if (line.startsWith("data: ")) {
+          try {
+            const event = JSON.parse(line.substring(6));
+            processStreamEvent(event, contentEl, cursor, (chunk) => {
+              accumulatedText += chunk;
+            });
+          } catch (err) {
+            console.error("Failed to parse SSE event:", err, line);
+          }
+        }
+      }
+    }
+
+    // Finished
+    updatePipelineStep(7); // all done
+    cursor.remove();
+    contentEl.innerHTML = formatMarkdown(accumulatedText);
+    badge.innerText = "Complete";
+    badge.style.color = "var(--success)";
+  } catch (err) {
+    cursor.remove();
+    contentEl.innerHTML = `<span style="color:var(--danger)">⚠️ Streaming error: ${escapeHtml(err.message)}</span>`;
+    badge.innerText = "Error";
+    badge.style.color = "var(--danger)";
+  } finally {
+    if (statusInd) statusInd.classList.remove("busy");
+  }
+}
+
+function processStreamEvent(event, contentEl, cursor, appendText) {
+  if (event.stage === "stage_1_tokenization") {
+    updatePipelineStep(2);
+    renderStage1Telemetry(event.data);
+  } else if (event.stage === "stage_2_rag") {
+    updatePipelineStep(3);
+    renderStage2Telemetry(event.retrieved_docs, event.full_prompt);
+  } else if (event.stage === "stage_stream_token") {
+    updatePipelineStep(5); // In logits & softmax sampling
+
+    // Append token to text
+    appendText(event.token);
+    cursor.insertAdjacentText("beforebegin", event.token);
+    const box = document.getElementById("chatMessages");
+    box.scrollTop = box.scrollHeight;
+
+    // Update real-time HUD metrics
+    if (event.stats) {
+      document.getElementById("mTokSec").innerText = event.stats.tok_per_sec;
+      document.getElementById("mProgress").innerText = `${event.stats.progress_pct}%`;
+      document.getElementById("mElapsed").innerText = `${event.stats.elapsed_ms}ms`;
+      document.getElementById("mTokenTotal").innerText = `${event.token_index} / ${event.total_tokens}`;
+    }
+
+    // Update current token & attended token pills
+    document.getElementById("liveCurrentToken").innerText = event.token || "<space>";
+    document.getElementById("liveAttendedToken").innerText = event.attended_token ? `"${event.attended_token}"` : "None";
+
+    // Update Live Candidate Race Bars
+    renderLiveCandidateRace(event.telemetry);
+  } else if (event.stage === "stage_complete") {
+    updatePipelineStep(6);
+    if (event.telemetry) {
+      document.getElementById("telemetryBadge").innerText = `Done (${event.telemetry.tokens_per_second} tok/s)`;
+    }
+  }
+}
+
+function renderLiveCandidateRace(telemetry) {
+  const container = document.getElementById("liveCandidatesList");
+  if (!container || !telemetry || !telemetry.candidates) return;
+
+  container.innerHTML = "";
+  const topCands = telemetry.candidates.slice(0, 5);
+
+  topCands.forEach(c => {
+    const isWinner = c.is_winner;
+    const row = document.createElement("div");
+    row.className = "candidate-row";
+    row.innerHTML = `
+      <span class="candidate-name ${isWinner ? 'winner' : ''}" title="${escapeHtml(c.token)}">
+        ${isWinner ? '👑 ' : ''}<code>${escapeHtml(c.token)}</code>
+      </span>
+      <div class="cand-bar-wrap">
+        <div class="cand-bar-fill ${isWinner ? 'winner-bar' : ''}" style="width: ${Math.max(c.percentage, 1)}%"></div>
+      </div>
+      <span class="cand-pct-badge">${c.percentage}%</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderStage1Telemetry(tokenData) {
+  const tokensBox = document.getElementById("telemetryTokens");
+  tokensBox.innerHTML = "";
+  const bpe = tokenData.bpe;
+  bpe.chips.forEach(chip => {
+    const el = document.createElement("span");
+    el.className = "token-chip";
+    el.style.backgroundColor = chip.color;
+    el.innerHTML = `${chip.is_space ? '␣' : escapeHtml(chip.token)} <span class="token-id-tag">#${chip.id}</span>`;
+    tokensBox.appendChild(el);
+  });
+
+  document.getElementById("statChars").innerText = tokenData.char_count;
+  document.getElementById("statTokens").innerText = bpe.token_count;
+  document.getElementById("statRatio").innerText = bpe.compression_ratio;
+}
+
+function renderStage2Telemetry(hits, fullPrompt) {
+  const ragBox = document.getElementById("telemetryRagBox");
+  ragBox.innerHTML = "";
+  if (!hits || hits.length === 0) {
+    ragBox.innerHTML = '<span class="placeholder-text">RAG disabled or no matching documents retrieved.</span>';
+  } else {
+    hits.forEach(hit => {
+      const card = document.createElement("div");
+      card.className = "rag-hit-card";
+      card.innerHTML = `
+        <div class="rag-hit-title">
+          <span>${escapeHtml(hit.title)}</span>
+          <span class="rag-hit-score">${hit.similarity_percentage}% match</span>
+        </div>
+        <div class="rag-hit-body">${escapeHtml(hit.snippet)}</div>
+      `;
+      ragBox.appendChild(card);
+    });
+  }
+
+  const promptBox = document.getElementById("telemetryPromptCode");
+  if (promptBox) promptBox.innerText = fullPrompt || "// Prompt assembly preview";
+}
+
+async function handleSyncChat(query) {
+  const badge = document.getElementById("telemetryBadge");
+  badge.innerText = "Processing...";
+  badge.style.color = "var(--warning)";
+
+  updatePipelineStep(1);
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: query,
+        temperature: parseFloat(document.getElementById("chatTemp").value),
+        top_p: parseFloat(document.getElementById("chatTopP").value),
+        top_k: parseInt(document.getElementById("chatTopK").value),
+        enable_rag: document.getElementById("chatRagToggle").checked
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) {
+      appendChatMessage("bot", `⚠️ Error: ${data.error}`);
+    } else {
+      appendChatMessage("bot", data.response);
+      renderChatTelemetry(data);
+    }
+  } catch (err) {
+    appendChatMessage("bot", `⚠️ Connection error: ${err.message}`);
+  } finally {
+    badge.innerText = "Completed";
+    badge.style.color = "var(--success)";
+    updatePipelineStep(6);
+  }
+}
+
+function renderChatTelemetry(data) {
+  renderStage1Telemetry(data.stages.stage_1_tokenization);
+  renderStage2Telemetry(data.stages.stage_2_vector_search, data.stages.stage_3_prompt_assembly.full_prompt);
+
+  // Sampling steps
+  const steps = data.stages.stage_4_sampling_telemetry;
+  if (steps && steps.length > 0) {
+    renderLiveCandidateRace(steps[0]);
+    document.getElementById("liveCurrentToken").innerText = steps[0].winner || "-";
+    document.getElementById("liveAttendedToken").innerText = "Context words";
+  }
+
+  if (data.telemetry) {
+    document.getElementById("mTokSec").innerText = data.telemetry.tokens_per_second || "35.0";
+    document.getElementById("mProgress").innerText = "100%";
+    document.getElementById("mElapsed").innerText = `${data.telemetry.elapsed_ms}ms`;
+    document.getElementById("mTokenTotal").innerText = `${data.telemetry.output_tokens_count}`;
+  }
+}
+
+function createStreamingBotBubble() {
+  const box = document.getElementById("chatMessages");
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble bot-bubble";
+
+  const header = document.createElement("div");
+  header.className = "msg-header";
+  header.innerHTML = `
+    <span class="sender-name">🤖 Real-Time Glass-Box AI</span>
+    <span class="msg-time">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+  `;
+
+  const contentEl = document.createElement("div");
+  contentEl.className = "msg-content";
+
+  const cursor = document.createElement("span");
+  cursor.className = "blinking-cursor";
+  contentEl.appendChild(cursor);
+
+  bubble.appendChild(header);
+  bubble.appendChild(contentEl);
+  box.appendChild(bubble);
+  box.scrollTop = box.scrollHeight;
+
+  return { bubble, contentEl, cursor };
 }
 
 window.sendQuickPrompt = function(promptText) {
@@ -104,7 +399,7 @@ function appendChatMessage(role, content) {
   const header = document.createElement("div");
   header.className = "msg-header";
   header.innerHTML = `
-    <span class="sender-name">${role === "user" ? "👤 You" : "🤖 Glass-Box AI"}</span>
+    <span class="sender-name">${role === "user" ? "👤 You" : "🤖 Real-Time Glass-Box AI"}</span>
     <span class="msg-time">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
   `;
 
@@ -133,77 +428,163 @@ function formatMarkdown(text) {
   return `<p>${html}</p>`;
 }
 
-function renderChatTelemetry(data) {
-  // Stage 1: Tokenization
-  const tokensBox = document.getElementById("telemetryTokens");
-  tokensBox.innerHTML = "";
-  const bpe = data.stages.stage_1_tokenization.bpe;
-  bpe.chips.forEach(chip => {
-    const el = document.createElement("span");
-    el.className = "token-chip";
-    el.style.backgroundColor = chip.color;
-    el.innerHTML = `${chip.is_space ? '␣' : escapeHtml(chip.token)} <span class="token-id-tag">#${chip.id}</span>`;
-    tokensBox.appendChild(el);
+/* ==================== 3. ATTENTION ENGINE LAB ==================== */
+function initAttentionLab() {
+  const computeBtn = document.getElementById("attComputeBtn");
+  const input = document.getElementById("attSentenceInput");
+  const headBtns = document.querySelectorAll(".head-btn");
+
+  let currentHead = "coreference";
+
+  headBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      headBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentHead = btn.dataset.head;
+      computeAttention();
+    });
   });
 
-  document.getElementById("statChars").innerText = data.stages.stage_1_tokenization.char_count;
-  document.getElementById("statTokens").innerText = bpe.token_count;
-  document.getElementById("statRatio").innerText = bpe.compression_ratio;
+  async function computeAttention() {
+    const text = input.value.trim();
+    if (!text) return;
 
-  // Stage 2: RAG Search
-  const ragBox = document.getElementById("telemetryRagBox");
-  ragBox.innerHTML = "";
-  const hits = data.stages.stage_2_vector_search;
-  if (!hits || hits.length === 0) {
-    ragBox.innerHTML = '<span class="placeholder-text">RAG disabled or no matching documents retrieved.</span>';
-  } else {
-    hits.forEach(hit => {
-      const card = document.createElement("div");
-      card.className = "rag-hit-card";
-      card.innerHTML = `
-        <div class="rag-hit-title">
-          <span>${escapeHtml(hit.title)}</span>
-          <span class="rag-hit-score">${hit.similarity_percentage}% match</span>
-        </div>
-        <div class="rag-hit-body">${escapeHtml(hit.snippet)}</div>
-      `;
-      ragBox.appendChild(card);
-    });
+    try {
+      const res = await fetch("/api/attention", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, head_type: currentHead })
+      });
+      const data = await res.json();
+      renderAttentionResults(data);
+    } catch (err) {
+      console.error("Attention calc failed:", err);
+    }
   }
 
-  // Stage 3: Prompt Assembly
-  const promptBox = document.getElementById("telemetryPromptCode");
-  promptBox.innerText = data.stages.stage_3_prompt_assembly.full_prompt;
+  computeBtn.addEventListener("click", computeAttention);
+}
 
-  // Stage 4: Next-Token Sampling Telemetry
-  const samplingBox = document.getElementById("telemetrySamplingBox");
-  samplingBox.innerHTML = "";
-  const steps = data.stages.stage_4_sampling_telemetry;
-  if (steps && steps.length > 0) {
-    steps.forEach((step, idx) => {
-      const stepEl = document.createElement("div");
-      stepEl.className = "telemetry-step-block";
-      stepEl.style.marginBottom = "0.75rem";
-      
-      let candidatesHtml = step.candidates.slice(0, 4).map(c => `
-        <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:2px;">
-          <span>${c.is_winner ? '🏆 ' : ''}<code>${escapeHtml(c.token)}</code> (logit: ${c.logit})</span>
-          <span style="font-family:var(--font-mono); color:${c.is_winner ? 'var(--success)' : 'var(--text-muted)'}">${c.percentage}%</span>
-        </div>
-      `).join("");
+window.setAttPreset = function(sentence, head) {
+  document.getElementById("attSentenceInput").value = sentence;
+  const btn = document.querySelector(`.head-btn[data-head="${head}"]`);
+  if (btn) btn.click();
+  else document.getElementById("attComputeBtn").click();
+};
 
-      stepEl.innerHTML = `
-        <div style="font-size:0.78rem; font-weight:600; color:var(--primary); margin-bottom:0.2rem;">
-          Token Step #${step.step_number}: Chosen: <code>${escapeHtml(step.winner)}</code>
+function renderAttentionResults(data) {
+  const tokens = data.tokens;
+  const matrix = data.attention_matrix;
+  const n = tokens.length;
+
+  document.getElementById("headExplainerText").innerText = data.head_description;
+
+  // 1. Render Interactive Token Arc Pills
+  const arcRow = document.getElementById("tokenArcsRow");
+  arcRow.innerHTML = "";
+  const focusCard = document.getElementById("arcFocusCard");
+
+  tokens.forEach((tok, idx) => {
+    const pill = document.createElement("button");
+    pill.className = "arc-token-pill";
+    pill.innerHTML = `<code>${escapeHtml(tok)}</code> <span style="font-size:0.68rem; opacity:0.7">#${idx}</span>`;
+    
+    pill.addEventListener("mouseenter", () => {
+      document.querySelectorAll(".arc-token-pill").forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+
+      // Show top attended connections
+      const row = matrix[idx];
+      const sorted = row.map((w, j) => ({ j, tok: tokens[j], w })).sort((a, b) => b.w - a.w);
+      const top3 = sorted.slice(0, 3);
+
+      focusCard.innerHTML = `
+        <div style="font-weight:600; color:var(--primary); margin-bottom:4px;">
+          Token #${idx} <code>${escapeHtml(tok)}</code> is attending to:
         </div>
-        ${candidatesHtml}
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${top3.map(c => `
+            <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+              <span>➔ <code>${escapeHtml(c.tok)}</code> (position #${c.j})</span>
+              <strong style="color:${c.w > 0.3 ? 'var(--success)' : 'var(--text-muted)'}">${(c.w * 100).toFixed(1)}% weight</strong>
+            </div>
+          `).join("")}
+        </div>
       `;
-      samplingBox.appendChild(stepEl);
+
+      // Highlight heatmap row
+      highlightHeatmapRow(idx);
     });
+
+    arcRow.appendChild(pill);
+  });
+
+  // Default focus on token 'it' if present, or first token
+  const itIdx = tokens.findIndex(t => t.toLowerCase() === "it" || t.toLowerCase() === "bank");
+  const targetPill = itIdx >= 0 ? arcRow.children[itIdx] : arcRow.children[0];
+  if (targetPill) targetPill.dispatchEvent(new Event("mouseenter"));
+
+  // 2. Render Heatmap Grid
+  const grid = document.getElementById("attentionHeatmapGrid");
+  grid.style.gridTemplateColumns = `repeat(${n + 1}, 38px)`;
+  grid.innerHTML = "";
+
+  // Corner empty
+  grid.appendChild(createGridCell("", "heatmap-header-token"));
+
+  // Top header tokens (Keys)
+  tokens.forEach(t => {
+    grid.appendChild(createGridCell(t, "heatmap-header-token", `Key: "${t}"`));
+  });
+
+  // Rows (Queries)
+  for (let i = 0; i < n; i++) {
+    // Row header (Query)
+    grid.appendChild(createGridCell(tokens[i], "heatmap-header-token", `Query: "${tokens[i]}"`));
+
+    for (let j = 0; j < n; j++) {
+      const w = matrix[i][j];
+      const cell = document.createElement("div");
+      cell.className = `heatmap-cell cell-row-${i}`;
+      cell.title = `Query "${tokens[i]}" ➔ Key "${tokens[j]}": ${(w * 100).toFixed(1)}%`;
+      
+      // Calculate color intensity
+      // low = #111a30, mid = #3b82f6, high = #ec4899
+      if (w < 0.2) {
+        cell.style.backgroundColor = `rgba(59, 130, 246, ${Math.max(0.15, w * 2)})`;
+      } else if (w < 0.5) {
+        cell.style.backgroundColor = `rgba(168, 85, 247, ${w * 1.5})`;
+      } else {
+        cell.style.backgroundColor = `rgba(236, 72, 153, ${Math.min(1.0, w * 1.2)})`;
+      }
+
+      cell.innerText = Math.round(w * 100);
+      grid.appendChild(cell);
+    }
   }
 }
 
-/* ==================== 3. TAB 2: TOKENIZER LAB ==================== */
+function createGridCell(text, className, title = "") {
+  const el = document.createElement("div");
+  el.className = className;
+  el.innerText = text;
+  if (title) el.title = title;
+  return el;
+}
+
+function highlightHeatmapRow(rowIdx) {
+  document.querySelectorAll(".heatmap-cell").forEach(cell => {
+    if (cell.classList.contains(`cell-row-${rowIdx}`)) {
+      cell.style.outline = "2px solid #38bdf8";
+      cell.style.zIndex = "5";
+    } else {
+      cell.style.outline = "none";
+      cell.style.zIndex = "1";
+    }
+  });
+}
+
+/* ==================== 4. TOKENIZER LAB ==================== */
 function initTokenizerLab() {
   const analyzeBtn = document.getElementById("tokAnalyzeBtn");
   const textarea = document.getElementById("tokInputText");
@@ -226,7 +607,7 @@ function initTokenizerLab() {
   }
 
   analyzeBtn.addEventListener("click", runTokenize);
-  runTokenize(); // Initial run
+  runTokenize();
 }
 
 window.setTokPreset = function(presetText) {
@@ -265,7 +646,7 @@ function renderTokenizerResults(data) {
   // Char
   const charBox = document.getElementById("charDisplayChips");
   charBox.innerHTML = "";
-  data.char.tokens.slice(0, 45).forEach((ch, i) => {
+  data.char.tokens.slice(0, 45).forEach((ch) => {
     const el = document.createElement("span");
     el.className = "token-chip";
     el.style.backgroundColor = "#334155";
@@ -278,7 +659,7 @@ function renderTokenizerResults(data) {
   document.getElementById("charCount").innerText = data.char.token_count;
 }
 
-/* ==================== 4. TAB 3: EMBEDDINGS LAB ==================== */
+/* ==================== 5. EMBEDDINGS LAB ==================== */
 function initEmbeddingsLab() {
   const calcBtn = document.getElementById("calcSimBtn");
   const arithBtn = document.getElementById("runArithBtn");
@@ -338,7 +719,6 @@ function initEmbeddingsLab() {
 
   reloadPcaBtn.addEventListener("click", loadPcaMap);
 
-  // Initial runs
   calcBtn.click();
   arithBtn.click();
 }
@@ -359,7 +739,6 @@ async function loadPcaMap() {
     const data = await res.json();
     const points = data.points;
 
-    // Draw background & grid
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
@@ -367,7 +746,6 @@ async function loadPcaMap() {
     ctx.strokeStyle = "#1e293b";
     ctx.lineWidth = 1;
 
-    // Center axes
     ctx.beginPath();
     ctx.moveTo(w / 2, 0);
     ctx.lineTo(w / 2, h);
@@ -385,21 +763,17 @@ async function loadPcaMap() {
       other: "#94a3b8"
     };
 
-    // Draw points
     points.forEach(pt => {
-      // Map [-80, 80] to canvas coords
       const px = (w / 2) + (pt.x / 80) * (w / 2 - 50);
       const py = (h / 2) - (pt.y / 80) * (h / 2 - 40);
 
       const color = catColors[pt.category] || "#94a3b8";
 
-      // Outer glow circle
       ctx.beginPath();
       ctx.arc(px, py, 6, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
 
-      // Label text
       ctx.fillStyle = "#f8fafc";
       ctx.font = "12px 'Inter', sans-serif";
       ctx.fillText(pt.word, px + 9, py + 4);
@@ -409,7 +783,7 @@ async function loadPcaMap() {
   }
 }
 
-/* ==================== 5. TAB 4: SAMPLING LAB ==================== */
+/* ==================== 6. SAMPLING LAB ==================== */
 function initSamplingLab() {
   const tempSlider = document.getElementById("labTempSlider");
   const topKSlider = document.getElementById("labTopKSlider");
@@ -443,7 +817,7 @@ function initSamplingLab() {
   topPSlider.addEventListener("input", updateSim);
   sampleBtn.addEventListener("click", updateSim);
 
-  updateSim(); // Initial render
+  updateSim();
 }
 
 function renderSamplingBars(data) {
@@ -475,7 +849,6 @@ function renderSamplingBars(data) {
     container.appendChild(row);
   });
 
-  // Notes
   const notesBox = document.getElementById("samplingNotesBox");
   notesBox.innerHTML = "";
   data.notes.forEach(note => {
@@ -485,7 +858,7 @@ function renderSamplingBars(data) {
   });
 }
 
-/* ==================== 6. TAB 5: RAG LAB ==================== */
+/* ==================== 7. RAG LAB ==================== */
 function initRagLab() {
   const searchInput = document.getElementById("ragSearchInput");
   const searchBtn = document.getElementById("ragSearchBtn");

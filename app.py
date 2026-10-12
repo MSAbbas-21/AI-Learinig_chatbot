@@ -2,12 +2,14 @@
 AI Learning Chatbot & Interactive Architecture Studio
 =====================================================
 A complete web application to understand the internals of Generative AI,
-Tokenization, Embeddings, RAG, Attention, and Softmax Sampling.
+Tokenization, Embeddings, RAG, Self-Attention, and Softmax Sampling in Real Time.
 """
 
 import os
 import sys
-from flask import Flask, render_template, request, jsonify
+import json
+import time
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 
 # Add directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +19,7 @@ from ai_core.embeddings import EMBEDDING_ENGINE
 from ai_core.sampling import simulate_sampling_pipeline
 from ai_core.rag_engine import RAG_ENGINE
 from ai_core.generator import CHATBOT_ENGINE
+from ai_core.attention import ATTENTION_ENGINE
 
 app = Flask(__name__)
 
@@ -29,7 +32,7 @@ def index():
 @app.route("/api/chat", methods=["POST"])
 def chat():
     """
-    Processes chat prompt and returns the generated answer + full glass-box telemetry.
+    Synchronous chat API: returns full generated response and glass-box telemetry.
     """
     try:
         data = request.get_json() or {}
@@ -49,6 +52,73 @@ def chat():
             top_p=top_p,
             enable_rag=enable_rag
         )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/chat/stream", methods=["GET", "POST"])
+def chat_stream():
+    """
+    Real-time Server-Sent Events (SSE) streaming API.
+    Streams tokens one by one with live candidate logits and attention telemetry.
+    """
+    try:
+        if request.method == "POST":
+            data = request.get_json() or {}
+        else:
+            data = request.args
+
+        message = data.get("message", "").strip()
+        if not message:
+            return jsonify({"error": "Message cannot be empty"}), 400
+
+        temperature = float(data.get("temperature", 0.7))
+        top_k = int(data.get("top_k", 40))
+        top_p = float(data.get("top_p", 0.9))
+        enable_rag = str(data.get("enable_rag", "true")).lower() in ("true", "1")
+        delay_ms = float(data.get("delay_ms", 30.0))
+
+        def event_stream():
+            try:
+                for event in CHATBOT_ENGINE.generate_response_stream(
+                    user_message=message,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    enable_rag=enable_rag,
+                    token_delay_ms=delay_ms
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as ex:
+                yield f"data: {json.dumps({'stage': 'error', 'error': str(ex)})}\n\n"
+
+        return Response(
+            stream_with_context(event_stream()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive"
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/attention", methods=["POST"])
+def attention():
+    """
+    Computes real-time Self-Attention weights and attention matrix for any input sentence.
+    """
+    try:
+        data = request.get_json() or {}
+        text = data.get("text", "").strip()
+        head_type = data.get("head_type", "coreference")
+        if not text:
+            return jsonify({"error": "Text cannot be empty"}), 400
+
+        result = ATTENTION_ENGINE.compute_attention(text, head_type=head_type)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

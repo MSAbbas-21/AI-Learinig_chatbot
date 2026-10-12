@@ -3,6 +3,8 @@ Automated Integration Tests for AI Learning Studio
 ==================================================
 Tests:
 - /api/chat endpoint and telemetry schema
+- /api/chat/stream endpoint for real-time SSE streaming
+- /api/attention endpoint for Transformer attention weights
 - /api/tokenize with Char, Word, and BPE
 - /api/embeddings/similarity and vector arithmetic
 - /api/embeddings/projection PCA 2D coordinates
@@ -75,7 +77,23 @@ def run_tests():
     assert len(data["retrieved_docs"]) > 0
     print(f"✔ RAG vector search works: Top hit = '{data['retrieved_docs'][0]['title']}'")
 
-    # 8. Test Chatbot with full telemetry
+    # 8. Test Attention API
+    res = client.post("/api/attention", json={"text": "The animal didn't cross the street because it was too tired", "head_type": "coreference"})
+    assert res.status_code == 200
+    att_data = res.get_json()
+    assert "attention_matrix" in att_data
+    assert len(att_data["tokens"]) > 0
+    print(f"✔ Attention API works: Computed {len(att_data['tokens'])}x{len(att_data['tokens'])} attention matrix")
+
+    # 9. Test Real-time Stream API
+    res = client.get("/api/chat/stream?message=How%20AI%20works%20in%20real%20time&delay_ms=0")
+    assert res.status_code == 200
+    assert "text/event-stream" in res.content_type
+    stream_chunks = [chunk for chunk in res.response]
+    assert len(stream_chunks) > 5
+    print(f"✔ Real-time SSE Stream API works: Emitted {len(stream_chunks)} events in real time")
+
+    # 10. Test Synchronous Chatbot API
     res = client.post("/api/chat", json={"message": "What is a Transformer?", "temperature": 0.7})
     assert res.status_code == 200
     data = res.get_json()

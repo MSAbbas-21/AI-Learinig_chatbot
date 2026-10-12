@@ -1186,3 +1186,431 @@ body.dark-theme {
   font-size: 0.82rem;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   REAL-TIME STREAMING & ATTENTION ENGINE EXTENSIONS
+   ========================================================================== */
+
+/* Live Pipeline Flow Visualizer */
+.pipeline-flow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0d1527;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  gap: 0.5rem;
+}
+
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  background: #151e33;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.flow-step .step-num {
+  width: 18px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.flow-step.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 12px var(--primary-glow);
+  transform: translateY(-2px);
+}
+
+.flow-step.active .step-num {
+  background: var(--primary);
+  color: #000;
+}
+
+.flow-step.completed {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.flow-step.completed .step-num {
+  background: var(--success);
+  color: #000;
+}
+
+.flow-arrow {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+/* Live Metrics Strip */
+.live-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.metric-card {
+  background: #0e1526;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.metric-card .m-val {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.metric-card .m-lbl {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* Live Next-Token Inspector */
+.live-highlight-card {
+  border-left: 3px solid var(--primary);
+  background: linear-gradient(180deg, #131c33 0%, #0d1527 100%);
+}
+
+.live-token-info-row {
+  display: flex;
+  gap: 1rem;
+  margin: 0.75rem 0;
+  flex-wrap: wrap;
+}
+
+.curr-token-box, .curr-attn-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sub-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.active-token-pill {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid var(--primary);
+  color: #38bdf8;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  min-width: 60px;
+  text-align: center;
+}
+
+.attended-token-pill {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid var(--purple);
+  color: #c084fc;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Candidate Probability Race */
+.live-candidates-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.candidate-name {
+  font-family: var(--font-mono);
+  min-width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-main);
+}
+
+.candidate-name.winner {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.cand-bar-wrap {
+  flex: 1;
+  height: 12px;
+  background: #1c2742;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cand-bar-fill {
+  height: 100%;
+  background: var(--border-focus);
+  border-radius: 6px;
+  transition: width 0.15s ease-out;
+}
+
+.cand-bar-fill.winner-bar {
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.cand-pct-badge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  min-width: 45px;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+/* As-You-Type HUD */
+.as-you-type-hud {
+  background: #0b1122;
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  margin-top: 0.5rem;
+}
+
+.type-hud-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.type-hud-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 26px;
+  align-items: center;
+}
+
+.placeholder-text-dim {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Blinking stream cursor */
+.blinking-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background-color: var(--primary);
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Attention Engine Tab */
+.attention-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .attention-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.head-selector-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.head-btn {
+  background: #111a30;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.head-btn:hover {
+  background: #1b2644;
+  color: #fff;
+}
+
+.head-btn.active {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--purple);
+  color: #d8b4fe;
+  font-weight: 600;
+}
+
+.head-explainer-text {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+  font-style: italic;
+}
+
+/* Interactive Token Arcs */
+.token-arcs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  background: #0b1122;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-top: 0.5rem;
+}
+
+.arc-token-pill {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 0.35rem 0.65rem;
+  background: #17213b;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.arc-token-pill:hover, .arc-token-pill.active {
+  background: var(--primary);
+  color: #000;
+  font-weight: 600;
+  transform: translateY(-2px);
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.arc-focus-card {
+  margin-top: 0.75rem;
+  background: #0e1526;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+}
+
+/* Attention Heatmap */
+.heatmap-scroll-wrapper {
+  overflow: auto;
+  max-height: 480px;
+  background: #090e1a;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.heatmap-cell {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.68rem;
+  transition: transform 0.15s ease;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.15);
+  z-index: 10;
+  outline: 2px solid #fff;
+}
+
+.heatmap-header-token {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.legend-gradient-bar {
+  flex: 1;
+  height: 8px;
+  margin: 0 1rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #111a30 0%, #3b82f6 50%, #ec4899 100%);
+}
+
+.formula-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--primary);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
